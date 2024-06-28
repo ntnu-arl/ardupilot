@@ -14,6 +14,9 @@
 static Vector3p posvel_pos_target_cm;
 static Vector3f posvel_vel_target_cms;
 static uint32_t update_time_ms;
+static float yaw_rate_mavlink;
+
+// variable to hold yaw_rate
 
 struct {
     uint32_t update_time_ms;
@@ -197,6 +200,22 @@ void Sub::guided_set_velocity(const Vector3f& velocity)
     pos_control.set_vel_desired_cms(velocity);
 }
 
+void Sub::guided_set_velocity_yawrate(const Vector3f& velocity, float yaw_rate)
+{
+    // check we are in velocity control mode
+    if (guided_mode != Guided_Velocity) {
+        guided_vel_control_start();
+    }
+
+    update_time_ms = AP_HAL::millis();
+
+    // set position controller velocity target
+    pos_control.set_vel_desired_cms(velocity);
+
+    // set yaw rate
+    yaw_rate_mavlink = yaw_rate;
+}
+
 // set guided mode posvel target
 bool Sub::guided_set_destination_posvel(const Vector3f& destination, const Vector3f& velocity)
 {
@@ -261,6 +280,7 @@ void Sub::guided_run()
 
     case Guided_Velocity:
         // run velocity controller
+        // gcs().send_text(MAV_SEVERITY_INFO, "Guided_Velocity");
         guided_vel_control_run();
         break;
 
@@ -376,14 +396,19 @@ void Sub::guided_vel_control_run()
     motors.set_lateral(lateral_out);
     motors.set_forward(forward_out);
 
-    // call attitude controller
-    if (auto_yaw_mode == AUTO_YAW_HOLD) {
-        // roll & pitch from waypoint controller, yaw rate from pilot
-        attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), target_yaw_rate);
-    } else {
-        // roll, pitch from waypoint controller, yaw heading from auto_heading()
-        attitude_control.input_euler_angle_roll_pitch_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), get_auto_heading(), true);
-    }
+    // providing yaw rate  setpoint from mavlink
+    attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), yaw_rate_mavlink);
+    // // call attitude controller
+    // if (auto_yaw_mode == AUTO_YAW_HOLD) {
+    //     // roll & pitch from waypoint controller, yaw rate from pilot
+    //     // gcs().send_text(MAV_SEVERITY_INFO, "taget_yaw_rate: %f", target_yaw_rate);
+    //     gcs().send_text(MAV_SEVERITY_INFO, "input_euler called in guided_vel_control_run");
+    //     attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), yaw_rate_mavlink);
+    // } else {
+    //     // roll, pitch from waypoint controller, yaw heading from auto_heading()
+    //     attitude_control.input_euler_angle_roll_pitch_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), get_auto_heading(), true);
+    // }
+
 }
 
 // guided_posvel_control_run - runs the guided posvel controller

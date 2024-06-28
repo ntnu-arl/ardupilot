@@ -487,6 +487,7 @@ private:
     bool guided_set_destination(const Vector3f& destination);
     bool guided_set_destination(const Location& dest_loc);
     void guided_set_velocity(const Vector3f& velocity);
+    void guided_set_velocity_yawrate(const Vector3f& velocity, float yaw_rate);
     bool guided_set_destination_posvel(const Vector3f& destination, const Vector3f& velocity);
     void guided_set_angle(const Quaternion &q, float climb_rate_cms);
     void guided_run();

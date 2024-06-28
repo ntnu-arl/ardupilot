@@ -266,7 +266,7 @@ const AP_Param::GroupInfo GCS_MAVLINK_Parameters::var_info[] = {
     // @Range: 0 50
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("RAW_SENS", 0, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_RAW_SENSORS],  2),
+    AP_GROUPINFO("RAW_SENS", 0, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_RAW_SENSORS],  10),
 
     // @Param: EXT_STAT
     // @DisplayName: Extended status stream rate to ground station
@@ -275,7 +275,7 @@ const AP_Param::GroupInfo GCS_MAVLINK_Parameters::var_info[] = {
     // @Range: 0 50
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("EXT_STAT", 1, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_EXTENDED_STATUS],  2),
+    AP_GROUPINFO("EXT_STAT", 1, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_EXTENDED_STATUS],  10),
 
     // @Param: RC_CHAN
     // @DisplayName: RC Channel stream rate to ground station
@@ -284,7 +284,7 @@ const AP_Param::GroupInfo GCS_MAVLINK_Parameters::var_info[] = {
     // @Range: 0 50
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("RC_CHAN",  2, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_RC_CHANNELS],  2),
+    AP_GROUPINFO("RC_CHAN",  2, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_RC_CHANNELS],  10),
 
     // @Param: POSITION
     // @DisplayName: Position stream rate to ground station
@@ -293,7 +293,7 @@ const AP_Param::GroupInfo GCS_MAVLINK_Parameters::var_info[] = {
     // @Range: 0 50
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("POSITION", 4, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_POSITION],  3),
+    AP_GROUPINFO("POSITION", 4, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_POSITION],  10),
 
     // @Param: EXTRA1
     // @DisplayName: Extra data type 1 stream rate to ground station
@@ -320,7 +320,7 @@ const AP_Param::GroupInfo GCS_MAVLINK_Parameters::var_info[] = {
     // @Range: 0 50
     // @Increment: 1
     // @User: Advanced
-    AP_GROUPINFO("EXTRA3",   7, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_EXTRA3],  3),
+    AP_GROUPINFO("EXTRA3",   7, GCS_MAVLINK_Parameters, streamRates[GCS_MAVLINK::STREAM_EXTRA3],  10),
 
     // @Param: PARAMS
     // @DisplayName: Parameter stream rate to ground station
@@ -610,7 +610,7 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
         // decode packet
         mavlink_set_position_target_local_ned_t packet;
         mavlink_msg_set_position_target_local_ned_decode(&msg, &packet);
-
+        
         // exit if vehicle is not in Guided mode or Auto-Guided mode
         if ((sub.control_mode != GUIDED) && !(sub.control_mode == AUTO && sub.auto_mode == Auto_NavGuided)) {
             break;
@@ -671,7 +671,9 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
         if (!pos_ignore && !vel_ignore && acc_ignore) {
             sub.guided_set_destination_posvel(pos_vector, vel_vector);
         } else if (pos_ignore && !vel_ignore && acc_ignore) {
-            sub.guided_set_velocity(vel_vector);
+            // sub.guided_set_velocity(vel_vector);
+            sub.guided_set_velocity_yawrate(vel_vector, packet.yaw_rate * 100.0f);
+
         } else if (!pos_ignore && vel_ignore && acc_ignore) {
             sub.guided_set_destination(pos_vector);
         }
@@ -732,7 +734,7 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
 
         if (!pos_ignore && !vel_ignore && acc_ignore) {
             sub.guided_set_destination_posvel(pos_neu_cm, Vector3f(packet.vx * 100.0f, packet.vy * 100.0f, -packet.vz * 100.0f));
-        } else if (pos_ignore && !vel_ignore && acc_ignore) {
+        } else if (pos_ignore && !vel_ignore && acc_ignore) {            
             sub.guided_set_velocity(Vector3f(packet.vx * 100.0f, packet.vy * 100.0f, -packet.vz * 100.0f));
         } else if (!pos_ignore && vel_ignore && acc_ignore) {
             sub.guided_set_destination(pos_neu_cm);

@@ -354,6 +354,8 @@ void AC_AttitudeControl_Sub::rate_controller_run()
     _motors.set_yaw(get_rate_yaw_pid().update_all(_ang_vel_body.z, gyro_latest.z, _motors.limit.yaw));
 
     control_monitor_update();
+
+
 }
 
 // sanity check parameters.  should be called once before takeoff
