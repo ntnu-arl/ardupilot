@@ -279,7 +279,8 @@ bool AC_WPNav::get_wp_destination_loc(Location& destination) const
 ///     terrain_alt should be true if destination.z is an altitude above terrain (false if alt-above-ekf-origin)
 ///     returns false on failure (likely caused by missing terrain data)
 bool AC_WPNav::set_wp_destination(const Vector3f& destination, bool terrain_alt)
-{
+{   
+    // gcs().send_text(MAV_SEVERITY_INFO, "set_wp_destination");
     // re-initialise if previous destination has been interrupted
     if (!is_active() || !_flags.reached_destination) {
         wp_and_spline_init(_wp_desired_speed_xy_cms);

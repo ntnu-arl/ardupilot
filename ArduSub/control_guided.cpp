@@ -15,6 +15,7 @@ static Vector3p posvel_pos_target_cm;
 static Vector3f posvel_vel_target_cms;
 static uint32_t update_time_ms;
 static float yaw_rate_mavlink;
+static float yaw_mavlink;
 
 // variable to hold yaw_rate
 
@@ -130,9 +131,11 @@ void Sub::guided_angle_control_start()
 // Returns true if the fence is enabled and guided waypoint is within the fence
 // else return false if the waypoint is outside the fence
 bool Sub::guided_set_destination(const Vector3f& destination)
-{
+{   
+    gcs().send_text(MAV_SEVERITY_INFO, "Setting destination: %f %f %f", destination.x, destination.y, destination.z);
     // ensure we are in position control mode
     if (guided_mode != Guided_WP) {
+        gcs().send_text(MAV_SEVERITY_INFO, "Not Guided_WP");
         guided_pos_control_start();
     }
 
@@ -200,7 +203,7 @@ void Sub::guided_set_velocity(const Vector3f& velocity)
     pos_control.set_vel_desired_cms(velocity);
 }
 
-void Sub::guided_set_velocity_yawrate(const Vector3f& velocity, float yaw_rate)
+void Sub::guided_set_velocity(const Vector3f& velocity, float yaw_rate)
 {
     // check we are in velocity control mode
     if (guided_mode != Guided_Velocity) {
@@ -236,12 +239,50 @@ bool Sub::guided_set_destination_posvel(const Vector3f& destination, const Vecto
 
     update_time_ms = AP_HAL::millis();
     posvel_pos_target_cm = destination.topostype();
+    // gcs().send_text(MAV_SEVERITY_INFO, "Setting posvel_pos_target_cm: %f %f %f", posvel_pos_target_cm.x, posvel_pos_target_cm.y, posvel_pos_target_cm.z);
+    // gcs().send_text(MAV_SEVERITY_INFO, "Setting posvel_vel_target_cms: %f %f %f", velocity.x, velocity.y, velocity.z);
     posvel_vel_target_cms = velocity;
 
     pos_control.input_pos_vel_accel_xy(posvel_pos_target_cm.xy(), posvel_vel_target_cms.xy(), Vector2f());
     float dz = posvel_pos_target_cm.z;
     pos_control.input_pos_vel_accel_z(dz, posvel_vel_target_cms.z, 0);
     posvel_pos_target_cm.z = dz;
+
+    // log target
+    Log_Write_GuidedTarget(guided_mode, destination, velocity);
+    return true;
+}
+
+bool Sub::guided_set_destination_posvel(const Vector3f& destination, const Vector3f& velocity, float yaw)
+{
+    // check we are in velocity control mode
+    if (guided_mode != Guided_PosVel) {
+        guided_posvel_control_start();
+    }
+
+#if AC_FENCE == ENABLED
+    // reject destination if outside the fence
+    const Location dest_loc(destination, Location::AltFrame::ABOVE_ORIGIN);
+    if (!fence.check_destination_within_fence(dest_loc)) {
+        AP::logger().Write_Error(LogErrorSubsystem::NAVIGATION, LogErrorCode::DEST_OUTSIDE_FENCE);
+        // failure is propagated to GCS with NAK
+        return false;
+    }
+#endif
+
+    update_time_ms = AP_HAL::millis();
+    posvel_pos_target_cm = destination.topostype();
+    // gcs().send_text(MAV_SEVERITY_INFO, "Setting posvel_pos_target_cm: %f %f %f", posvel_pos_target_cm.x, posvel_pos_target_cm.y, posvel_pos_target_cm.z);
+    // gcs().send_text(MAV_SEVERITY_INFO, "Setting posvel_vel_target_cms: %f %f %f", velocity.x, velocity.y, velocity.z);
+    posvel_vel_target_cms = velocity;
+
+    pos_control.input_pos_vel_accel_xy(posvel_pos_target_cm.xy(), posvel_vel_target_cms.xy(), Vector2f());
+    float dz = posvel_pos_target_cm.z;
+    pos_control.input_pos_vel_accel_z(dz, posvel_vel_target_cms.z, 0);
+    posvel_pos_target_cm.z = dz;
+
+    // set yaw
+    yaw_mavlink = yaw;
 
     // log target
     Log_Write_GuidedTarget(guided_mode, destination, velocity);
@@ -275,6 +316,7 @@ void Sub::guided_run()
 
     case Guided_WP:
         // run position controller
+        // gcs().send_text(MAV_SEVERITY_INFO, "Guided_WP");
         guided_pos_control_run();
         break;
 
@@ -286,6 +328,7 @@ void Sub::guided_run()
 
     case Guided_PosVel:
         // run position-velocity controller
+        // gcs().send_text(MAV_SEVERITY_INFO, "Guided_Pos_Velocity");
         guided_posvel_control_run();
         break;
 
@@ -396,7 +439,7 @@ void Sub::guided_vel_control_run()
     motors.set_lateral(lateral_out);
     motors.set_forward(forward_out);
 
-    // providing yaw rate  setpoint from mavlink
+    // providing yaw rate  setpoint from mavlink  //Todo: add a YAW_BEHAVIOR parameter
     attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), yaw_rate_mavlink);
     // // call attitude controller
     // if (auto_yaw_mode == AUTO_YAW_HOLD) {
@@ -448,9 +491,13 @@ void Sub::guided_posvel_control_run()
     }
 
     // advance position target using velocity target
+    // gcs().send_text(MAV_SEVERITY_INFO, "posvel_vel_target_cms: %f %f %f", posvel_vel_target_cms.x, posvel_vel_target_cms.y, posvel_vel_target_cms.z);
     posvel_pos_target_cm += (posvel_vel_target_cms * pos_control.get_dt()).topostype();
+    
 
     // send position and velocity targets to position controller
+    // print posvel_pos_target_cm and posvel_vel_target_cms
+    // gcs().send_text(MAV_SEVERITY_INFO, "posvel_pos_target_cm: %f %f %f", posvel_pos_target_cm.x, posvel_pos_target_cm.y, posvel_pos_target_cm.z);
     pos_control.input_pos_vel_accel_xy(posvel_pos_target_cm.xy(), posvel_vel_target_cms.xy(), Vector2f());
     float pz = posvel_pos_target_cm.z;
     pos_control.input_pos_vel_accel_z(pz, posvel_vel_target_cms.z, 0);
@@ -467,14 +514,18 @@ void Sub::guided_posvel_control_run()
     motors.set_lateral(lateral_out);
     motors.set_forward(forward_out);
 
-    // call attitude controller
-    if (auto_yaw_mode == AUTO_YAW_HOLD) {
-        // roll & pitch from waypoint controller, yaw rate from pilot
-        attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), target_yaw_rate);
-    } else {
-        // roll, pitch from waypoint controller, yaw heading from auto_heading()
-        attitude_control.input_euler_angle_roll_pitch_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), get_auto_heading(), true);
-    }
+    // setting yaw from mavlink
+    gcs().send_text(MAV_SEVERITY_INFO, "input_euler called in guided_posvel_control_run with yaw_mavlink: %f", yaw_mavlink);
+    attitude_control.input_euler_angle_roll_pitch_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), yaw_mavlink, true);
+
+    // // call attitude controller
+    // if (auto_yaw_mode == AUTO_YAW_HOLD) {
+    //     // roll & pitch from waypoint controller, yaw rate from pilot
+    //     attitude_control.input_euler_angle_roll_pitch_euler_rate_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), target_yaw_rate);
+    // } else {
+    //     // roll, pitch from waypoint controller, yaw heading from auto_heading()
+    //     attitude_control.input_euler_angle_roll_pitch_yaw(channel_roll->get_control_in(), channel_pitch->get_control_in(), get_auto_heading(), true);
+    // }
 }
 
 // guided_angle_control_run - runs the guided angle controller

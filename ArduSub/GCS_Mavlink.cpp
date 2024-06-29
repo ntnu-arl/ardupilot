@@ -616,6 +616,8 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
             break;
         }
 
+        // gcs().send_text(MAV_SEVERITY_INFO, "MAV_FRAME: %d", packet.coordinate_frame);
+
         // check for supported coordinate frames
         if (packet.coordinate_frame != MAV_FRAME_LOCAL_NED &&
                 packet.coordinate_frame != MAV_FRAME_LOCAL_OFFSET_NED &&
@@ -669,14 +671,20 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
 
         // send request
         if (!pos_ignore && !vel_ignore && acc_ignore) {
-            sub.guided_set_destination_posvel(pos_vector, vel_vector);
+            // sub.guided_set_destination_posvel(pos_vector, vel_vector);
+            // gcs().send_text(MAV_SEVERITY_INFO, "In pose vel Yaw: %f", degrees(packet.yaw) * 100.0f);
+            sub.guided_set_destination_posvel(pos_vector, vel_vector, degrees(packet.yaw) * 100.0f);
         } else if (pos_ignore && !vel_ignore && acc_ignore) {
             // sub.guided_set_velocity(vel_vector);
-            sub.guided_set_velocity_yawrate(vel_vector, packet.yaw_rate * 100.0f);
+            sub.guided_set_velocity(vel_vector, packet.yaw_rate * 100.0f);
 
         } else if (!pos_ignore && vel_ignore && acc_ignore) {
+            // gcs().send_text(MAV_SEVERITY_INFO, "Set position target local ned");
+            // gcs().send_text(MAV_SEVERITY_INFO, "X: %f, Y: %f, Z: %f", pos_vector.x, pos_vector.y, pos_vector.z);
             sub.guided_set_destination(pos_vector);
         }
+
+        
 
         break;
     }
@@ -733,7 +741,7 @@ void GCS_MAVLINK_Sub::handleMessage(const mavlink_message_t &msg)
         }
 
         if (!pos_ignore && !vel_ignore && acc_ignore) {
-            sub.guided_set_destination_posvel(pos_neu_cm, Vector3f(packet.vx * 100.0f, packet.vy * 100.0f, -packet.vz * 100.0f));
+            sub.guided_set_destination_posvel(pos_neu_cm, Vector3f(packet.vx * 100.0f, packet.vy * 100.0f, -packet.vz * 100.0f));            
         } else if (pos_ignore && !vel_ignore && acc_ignore) {            
             sub.guided_set_velocity(Vector3f(packet.vx * 100.0f, packet.vy * 100.0f, -packet.vz * 100.0f));
         } else if (!pos_ignore && vel_ignore && acc_ignore) {
